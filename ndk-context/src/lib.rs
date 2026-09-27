@@ -93,11 +93,20 @@ impl AndroidContext {
 }
 
 /// Main entry point to this crate. Returns an [`AndroidContext`].
+///
+/// # Panics
+///
+/// Panics if the context is not initialized.
 pub fn android_context() -> AndroidContext {
+    try_android_context().expect("android context was not initialized")
+}
+
+/// Returns the [`AndroidContext`] if it is initialized.
+pub fn try_android_context() -> Option<AndroidContext> {
     let context = *ANDROID_CONTEXT
         .read()
         .unwrap_or_else(PoisonError::into_inner);
-    context.expect("android context was not initialized").0
+    context.map(|SharedContext(context)| context)
 }
 
 /// Initializes the [`AndroidContext`]. [`AndroidContext`] is initialized by [__ndk-glue__](https://crates.io/crates/ndk-glue)
@@ -107,15 +116,39 @@ pub fn android_context() -> AndroidContext {
 ///
 /// The pointers must be valid and this function must be called exactly once before `main` is
 /// called.
+///
+/// # Panics
+///
+/// Panics if the context is already initialized.
 pub unsafe fn initialize_android_context(java_vm: *mut c_void, context_jobject: *mut c_void) {
-    let previous = ANDROID_CONTEXT
+    // SAFETY: the caller upholds the same contract.
+    let initialized = try_initialize_android_context(java_vm, context_jobject);
+    assert!(
+        initialized.is_ok(),
+        "android context was already initialized"
+    );
+}
+
+/// Initializes the [`AndroidContext`], or returns the one already set.
+///
+/// # Safety
+///
+/// The pointers must be valid.
+pub unsafe fn try_initialize_android_context(
+    java_vm: *mut c_void,
+    context_jobject: *mut c_void,
+) -> Result<(), AndroidContext> {
+    let mut slot = ANDROID_CONTEXT
         .write()
-        .unwrap_or_else(PoisonError::into_inner)
-        .replace(SharedContext(AndroidContext {
-            java_vm,
-            context_jobject,
-        }));
-    assert!(previous.is_none());
+        .unwrap_or_else(PoisonError::into_inner);
+    if let Some(SharedContext(existing)) = *slot {
+        return Err(existing);
+    }
+    *slot = Some(SharedContext(AndroidContext {
+        java_vm,
+        context_jobject,
+    }));
+    Ok(())
 }
 
 /// Removes the [`AndroidContext`]. It is released by [__ndk-glue__](https://crates.io/crates/ndk-glue)
@@ -125,10 +158,25 @@ pub unsafe fn initialize_android_context(java_vm: *mut c_void, context_jobject: 
 ///
 /// This function must only be called after [`initialize_android_context()`],
 /// when the activity is subsequently destroyed according to Android.
+///
+/// # Panics
+///
+/// Panics if the context is not initialized.
 pub unsafe fn release_android_context() {
-    let previous = ANDROID_CONTEXT
+    // SAFETY: the caller upholds the same contract.
+    let released = try_release_android_context();
+    assert!(released.is_some(), "android context was not initialized");
+}
+
+/// Removes and returns the [`AndroidContext`], if any.
+///
+/// # Safety
+///
+/// Must only be called when the activity is destroyed according to Android.
+pub unsafe fn try_release_android_context() -> Option<AndroidContext> {
+    let released = ANDROID_CONTEXT
         .write()
         .unwrap_or_else(PoisonError::into_inner)
         .take();
-    assert!(previous.is_some());
+    released.map(|SharedContext(context)| context)
 }
