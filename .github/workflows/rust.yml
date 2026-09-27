@@ -113,6 +113,7 @@ jobs:
     needs: build
     # The macOS runners are arm64 and cannot boot the x86_64 system image.
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     strategy:
       matrix:
         source_os: [ubuntu-latest, windows-latest, local]
@@ -148,29 +149,6 @@ jobs:
         rustup target add x86_64-linux-android
         echo y | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-29"
 
-    - name: AVD cache
-      uses: actions/cache@v4
-      id: avd-cache
-      with:
-        path: |
-          ~/.android/avd/*
-          ~/.android/adb*
-        # Bump the trailing number when making changes to the emulator setup below
-        key: avd-${{ env.api-level }}-2
-
-    - name: create AVD and generate snapshot for caching
-      if: steps.avd-cache.outputs.cache-hit != 'true'
-      uses: reactivecircus/android-emulator-runner@v2
-      with:
-        api-level: ${{ env.api-level }}
-        arch: ${{ env.arch }}
-        target: ${{ env.target }}
-        profile: ${{ env.profile }}
-        emulator-options: ${{ env.emulator-options }}
-        disable-animations: true
-        force-avd-creation: false
-        script: echo "Generated AVD snapshot for caching."
-
     - name: Start hello_world example
       uses: reactivecircus/android-emulator-runner@v2
       with:
@@ -180,7 +158,7 @@ jobs:
         profile: ${{ env.profile }}
         emulator-options: -no-snapshot-save ${{ env.emulator-options }}
         disable-animations: true
-        force-avd-creation: false
+        force-avd-creation: true
         script: ./.github/workflows/android_test.sh "${{ steps.download.outputs.download-path }}"
 
     - name: Upload emulator logs
