@@ -40,15 +40,12 @@ jobs:
     name: Check MSRV (1.60.0)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@1.60.0
         with:
-          target: aarch64-linux-android
-      - uses: actions-rs/cargo@v1
-        with:
-          command: check
-          # See comment above about using one of our supported targets.
-          args: --workspace --all-targets --all-features --target aarch64-linux-android
+          targets: aarch64-linux-android
+      # Only the library is held to the MSRV, dev-dependencies and examples need newer toolchains.
+      - run: cargo check -p ndk-context --lib --all-features --target aarch64-linux-android
 
   build:
     strategy:
