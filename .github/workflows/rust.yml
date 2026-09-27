@@ -37,11 +37,11 @@ jobs:
         args: --all --all-targets --all-features --target aarch64-linux-android -- -Dwarnings
 
   check_msrv:
-    name: Check MSRV (1.60.0)
+    name: Check MSRV (1.63.0)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@1.60.0
+      - uses: dtolnay/rust-toolchain@1.63.0
         with:
           targets: aarch64-linux-android
       # Only the library is held to the MSRV, dev-dependencies and examples need newer toolchains.
@@ -190,6 +190,21 @@ jobs:
     - name: Test ndk-context
       run:
         cargo test -p ndk-context --all-features
+
+  miri:
+    runs-on: ubuntu-latest
+    name: Miri data race check
+
+    steps:
+    - uses: actions/checkout@v4
+    - uses: dtolnay/rust-toolchain@nightly
+      with:
+        components: miri
+    - name: Test ndk-context under Miri
+      env:
+        MIRIFLAGS: -Zmiri-many-seeds=0..32
+      run:
+        cargo miri test -p ndk-context --test concurrent_access
 
   docs:
     strategy:
